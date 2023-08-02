@@ -1,0 +1,82 @@
+#!/bin/bash
+
+DEFAULT_DIRECTORY="$PROJECTS_FOLDER"/../
+DIRECTORY=$DEFAULT_DIRECTORY
+BRANCH="release/1.11.0.0"
+# repos=action-cron-source
+
+echo "---------------------------------------------------------------------------"
+echo "      Directory: $DIRECTORY"
+echo " Default branch: $BRANCH"
+echo "          Repos: $repos"
+echo -e "---------------------------------------------------------------------------\n"
+
+change_dir() {
+  cd $DIRECTORY/$1
+#   pwd
+}
+
+git_status() {
+  git status
+}
+
+git_cleanup() {
+    git restore .
+    git clean -df
+    git clean -dxf
+    git clean -dXf
+    git reset HEAD --hard
+}
+
+change_branch() {
+    git fetch
+    git checkout $BRANCH
+    git merge origin/$BRANCH
+}
+
+cleanup_all() {
+    for r in $repos; do
+        # echo "> Project: $r"
+        let c++
+        change_dir $r
+        git_status $r
+        git_cleanup $r
+        change_branch $r
+        # echo -e "---------------------------------------------------------------------------\t[$c]\n"
+    done
+}
+
+cleanup_all
+
+apply() {
+    sed -i "s|aquasec/trivy:0.2[0-9].[0-9]|aquasec/trivy:0.27.1|" bitbucket-pipelines.yml
+    sed -i "s|sensedia/linux-base:1.[0-9]|sensedia/linux-base:1.4|" Dockerfile
+
+    git status
+    d=$(git diff .)
+    if [[ "$d" != "" ]]
+    then
+        grep -E "^[+-] " <<< $d
+        git add .
+        git branch -D feature/FLEX-644-update-base-image
+        git checkout -b feature/FLEX-644-update-base-image
+        git commit -m "[FLEX-644] Update Base image and Trivy
+
+Update Linux base image to 1.4 and Trivy to 0.27.1 on pipeline.
+        "
+        # git push -u origin feature/FLEX-644-update-base-image
+        # xdg-open https://bitbucket.org/sensedia/$1/pull-requests/new?source=feature/FLEX-644-update-base-image&t=1
+    else
+        echo "NO DIFF. Nothing to do."
+    fi
+}
+
+echo ""
+
+for r in $repos; do
+    echo "> Project: $r"
+    let i++
+    change_dir $r
+    apply $r
+    echo -e "---------------------------------------------------------------------------\t[$i]\n"
+done
